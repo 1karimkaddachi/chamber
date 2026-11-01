@@ -1,0 +1,60 @@
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: chamber
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-chamber}
+      POSTGRES_DB: chamber
+    volumes:
+      - chamber-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chamber -d chamber"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://chamber:${POSTGRES_PASSWORD:-chamber}@db:5432/chamber?schema=public
+      # A stack with no signing key cannot hold a session, so fail fast instead of
+      # booting an insecure container.
+      SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET must be set in .env}
+      DEV_AUTH: "false"
+      SERVE_WEB: "true"
+      API_HOST: 0.0.0.0
+      API_PORT: "3000"
+      WEB_ORIGIN: ${PUBLIC_WEB_ORIGIN:-http://localhost:3000}
+      DISCORD_REDIRECT_URI: ${PUBLIC_WEB_ORIGIN:-http://localhost:3000}/api/auth/callback
+      # Unset means "inherit the production default", which is secure cookies on.
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-}
+      TRUST_PROXY: ${TRUST_PROXY:-false}
+      STORAGE_DIR: /app/storage
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    volumes:
+      - chamber-storage:/app/storage
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/api/health').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+volumes:
+  chamber-db:
+  chamber-storage:

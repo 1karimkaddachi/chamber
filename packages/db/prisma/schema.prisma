@@ -1,0 +1,631 @@
+// Chamber — Prisma schema
+// PostgreSQL 14+ required.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────
+// Enums
+// ─────────────────────────────────────────────────────────────
+
+enum RoomPrivacy {
+  PUBLIC
+  PRIVATE
+  INVITE_ONLY
+  REQUEST
+  PASSWORD
+  FRIENDS
+  ROLE_RESTRICTED
+}
+
+enum RoomMemberRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum RequestStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  EXPIRED
+  CANCELLED
+}
+
+enum QueueStatus {
+  WAITING
+  ADMITTED
+  LEFT
+  EXPIRED
+}
+
+enum ReservationStatus {
+  SCHEDULED
+  CREATED
+  CANCELLED
+  EXPIRED
+  FAILED
+}
+
+enum RoomEventStatus {
+  SCHEDULED
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum MergeStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  EXPIRED
+  COMPLETED
+}
+
+enum PermissionTarget {
+  USER
+  ROLE
+}
+
+enum AuditCategory {
+  ROOM
+  CONFIG
+  PRIVACY
+  MEMBER
+  RESERVATION
+  QUEUE
+  TEMPLATE
+  AUTH
+  SYSTEM
+}
+
+enum ActiveRoomStatus {
+  ACTIVE
+  CLOSING
+}
+
+enum BanKind {
+  BAN
+  BLOCK
+}
+
+// ─────────────────────────────────────────────────────────────
+// Identity & guild configuration
+// ─────────────────────────────────────────────────────────────
+
+model User {
+  id        String   @id
+  username  String?
+  globalName String?
+  avatar    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  ownedRooms   ActiveRoom[]          @relation("RoomOwner")
+  reservations Reservation[]
+  auditLogs    AuditLog[]            @relation("AuditActor")
+  preferences  DashboardPreference?
+
+  @@map("users")
+}
+
+model Guild {
+  id        String   @id
+  name      String
+  icon      String?
+  ownerId   String?
+  botPresent Boolean @default(false)
+  locale    String   @default("en")
+  joinedAt  DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  config       GuildConfig?
+  triggers     TriggerChannel[]
+  categories   VoiceCategory[]
+  templates    RoomTemplate[]
+  roomTypes    RoomType[]
+  rooms        ActiveRoom[]
+  reservations Reservation[]
+  events       RoomEvent[]
+  history      RoomHistory[]
+  analytics    RoomAnalytics[]
+  auditLogs    AuditLog[]
+  mergeRequests MergeRequest[]
+
+  @@map("guilds")
+}
+
+model GuildConfig {
+  id     String @id @default(cuid())
+  guildId String @unique
+  guild  Guild  @relation(fields: [guildId], references: [id], onDelete: Cascade)
+
+  enabled       Boolean @default(true)
+  setupCompleted Boolean @default(false)
+
+  lobbyChannelId       String?
+  lobbyPanelMessageId  String?
+  logChannelId         String?
+  defaultCategoryId    String?
+  defaultTriggerChannelId String?
+  defaultTemplateId    String?
+
+  defaultPrivacy   RoomPrivacy @default(PUBLIC)
+  defaultUserLimit Int         @default(0)
+  defaultBitrate   Int         @default(64000)
+  roomNameTemplate String      @default("{user}'s room")
+  allowUserRenames Boolean     @default(true)
+
+  staffRoleIds String[] @default([])
+  adminRoleIds String[] @default([])
+
+  autoCleanup         Boolean @default(true)
+  emptyGraceSeconds   Int     @default(30)
+  maxRoomsPerUser     Int     @default(1)
+  maxRoomsPerGuild    Int     @default(50)
+  roomLifetimeMinutes Int     @default(240)
+  inactivityMinutes   Int     @default(120)
+  transferOnOwnerLeave Boolean @default(true)
+  tempAdminMinutes    Int     @default(60)
+  permissionsExpireMinutes Int @default(0)
+  retentionDays       Int     @default(90)
+
+  waitingRoomEnabled       Boolean @default(false)
+  waitingRoomChannelId     String?
+  waitingRequestExpiryMinutes Int  @default(30)
+
+  queueEnabled         Boolean @default(true)
+  queueMaxSize         Int     @default(10)
+  queuePriorityRoleIds String[] @default([])
+  queueAutoAdmit       Boolean @default(false)
+
+  reservationsEnabled          Boolean @default(true)
+  reservationsPerUser          Int     @default(3)
+  reservationWindowDays        Int     @default(30)
+  reservationMaxDurationMinutes Int    @default(480)
+
+  eventsEnabled    Boolean @default(true)
+  mergingEnabled   Boolean @default(true)
+  cloningEnabled   Boolean @default(true)
+  passwordEnabled  Boolean @default(true)
+  passwordMaxAttempts  Int @default(5)
+  passwordLockoutMinutes Int @default(15)
+
+  aiEnabled        Boolean @default(false)
+  featureOverrides Json    @default("{}")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("guild_configs")
+}
+
+model TriggerChannel {
+  id        String   @id @default(cuid())
+  guildId   String
+  guild     Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  channelId String
+  name      String?
+  categoryId String?
+  templateId String?
+  roomTypeKey String?
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([guildId, channelId])
+  @@index([guildId, enabled])
+  @@map("trigger_channels")
+}
+
+model VoiceCategory {
+  id         String   @id @default(cuid())
+  guildId    String
+  guild      Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  categoryId String
+  name       String?
+  templateId String?
+  maxRooms   Int      @default(0)
+  enabled    Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  @@unique([guildId, categoryId])
+  @@map("voice_categories")
+}
+
+model RoomTemplate {
+  id          String  @id @default(cuid())
+  guildId     String?
+  guild       Guild?  @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  name        String
+  slug        String
+  description String?
+  emoji       String?
+  accentColor String? @default("#7c6cff")
+  roomTypeKey String?
+  defaultPrivacy RoomPrivacy @default(PUBLIC)
+  defaultLimit    Int         @default(0)
+  defaultBitrate  Int         @default(64000)
+  roomNameRule    String?     @default("{user}'s {type}")
+  autoSettings    Json        @default("{}")
+  allowedRoleIds  String[]    @default([])
+  isBuiltin       Boolean     @default(false)
+  createdById     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  rooms ActiveRoom[]
+
+  @@index([guildId])
+  @@index([slug])
+  @@map("room_templates")
+}
+
+model RoomType {
+  id            String  @id @default(cuid())
+  guildId       String?
+  guild         Guild?  @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  key           String
+  name          String
+  emoji         String  @default("🎧")
+  description   String?
+  defaultPrivacy RoomPrivacy @default(PUBLIC)
+  defaultLimit  Int     @default(0)
+  templateId    String?
+  sortOrder     Int     @default(0)
+  isBuiltin     Boolean @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([guildId])
+  @@map("room_types")
+}
+
+// ─────────────────────────────────────────────────────────────
+// Live rooms
+// ─────────────────────────────────────────────────────────────
+
+model ActiveRoom {
+  id        String @id @default(cuid())
+  guildId   String
+  guild     Guild  @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  channelId String @unique
+
+  ownerId String
+  owner   User   @relation("RoomOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+
+  templateId String?
+  template   RoomTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+
+  roomTypeKey      String?
+  parentCategoryId String?
+  name             String
+  topic            String?
+  emoji            String?
+  description      String?
+  bannerUrl        String?
+  theme            String?
+  privacy          RoomPrivacy @default(PUBLIC)
+  passwordHash     String?
+  locked           Boolean     @default(false)
+  hidden           Boolean     @default(false)
+  userLimit        Int         @default(0)
+  bitrate          Int         @default(64000)
+  rtcRegion        String?
+  status           ActiveRoomStatus @default(ACTIVE)
+  settings         Json        @default("{}")
+
+  controlMessageId String?
+  controlChannelId String?
+
+  totalJoins  Int @default(0)
+  peakMembers Int @default(0)
+
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  lastActivityAt DateTime  @default(now())
+  expiresAt      DateTime?
+  mergedIntoChannelId String?
+
+  members        RoomMember[]
+  permissions    RoomPermission[]
+  bans           RoomBan[]
+  invitations    RoomInvitation[]
+  waitingRequests WaitingRequest[]
+  queueEntries   QueueEntry[]
+  events         RoomEvent[]
+  passwordAttempts PasswordAttempt[]
+
+  mergeRequested MergeRequest[] @relation("MergeRequester")
+  mergeTargeted  MergeRequest[] @relation("MergeTarget")
+
+  @@index([guildId, status])
+  @@index([ownerId])
+  @@index([expiresAt])
+  @@map("active_rooms")
+}
+
+model RoomMember {
+  id       String  @id @default(cuid())
+  roomId   String
+  room     ActiveRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  userId   String
+  role     RoomMemberRole @default(MEMBER)
+  joinedAt DateTime @default(now())
+  tempAdminUntil DateTime?
+
+  @@unique([roomId, userId])
+  @@index([userId])
+  @@map("room_members")
+}
+
+model RoomPermission {
+  id         String @id @default(cuid())
+  roomId     String
+  room       ActiveRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  targetType PermissionTarget
+  targetId   String
+  allowConnect Boolean @default(true)
+  expiresAt  DateTime?
+  createdBy  String?
+  createdAt  DateTime @default(now())
+
+  @@unique([roomId, targetType, targetId])
+  @@index([expiresAt])
+  @@map("room_permissions")
+}
+
+model RoomBan {
+  id          String  @id @default(cuid())
+  roomId      String
+  room        ActiveRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  userId      String
+  moderatorId String
+  kind        BanKind @default(BAN)
+  reason      String?
+  expiresAt   DateTime?
+  createdAt   DateTime @default(now())
+
+  @@unique([roomId, userId])
+  @@index([roomId, kind])
+  @@map("room_bans")
+}
+
+model RoomInvitation {
+  id         String @id @default(cuid())
+  roomId     String
+  room       ActiveRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  inviterId  String
+  inviteeId  String
+  status     RequestStatus @default(PENDING)
+  createdAt  DateTime @default(now())
+  expiresAt  DateTime?
+  resolvedAt DateTime?
+
+  @@index([roomId, status])
+  @@index([inviteeId, status])
+  @@map("room_invitations")
+}
+
+model WaitingRequest {
+  id         String @id @default(cuid())
+  roomId     String
+  room       ActiveRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  userId     String
+  message    String?
+  status     RequestStatus @default(PENDING)
+  createdAt  DateTime @default(now())
+  expiresAt  DateTime
+  resolvedById String?
+  resolvedAt   DateTime?
+
+  @@index([roomId, status])
+  @@index([userId, status])
+  @@map("waiting_requests")
+}
+
+model QueueEntry {
+  id        String @id @default(cuid())
+  roomId    String
+  room      ActiveRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  userId    String
+  priority  Int    @default(0)
+  status    QueueStatus @default(WAITING)
+  joinedAt  DateTime @default(now())
+  admittedAt DateTime?
+  expiresAt DateTime?
+
+  @@index([roomId, status, priority, joinedAt])
+  @@index([userId, status])
+  @@map("queue_entries")
+}
+
+model PasswordAttempt {
+  id         String @id @default(cuid())
+  roomId     String
+  room       ActiveRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  userId     String
+  attempts   Int      @default(0)
+  lockedUntil DateTime?
+  updatedAt  DateTime @updatedAt
+
+  @@unique([roomId, userId])
+  @@map("password_attempts")
+}
+
+// ─────────────────────────────────────────────────────────────
+// Reservations, events, merging
+// ─────────────────────────────────────────────────────────────
+
+model Reservation {
+  id        String @id @default(cuid())
+  guildId   String
+  guild     Guild  @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  hostId    String
+  host      User   @relation(fields: [hostId], references: [id], onDelete: Cascade)
+  hostName  String?
+  templateId String?
+  roomTypeKey String?
+  name      String
+  privacy   RoomPrivacy @default(PUBLIC)
+  userLimit Int      @default(0)
+  durationMinutes Int @default(60)
+  scheduledFor DateTime
+  status    ReservationStatus @default(SCHEDULED)
+  roomChannelId String?
+  error     String?
+  remindedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, scheduledFor])
+  @@index([guildId, scheduledFor])
+  @@map("reservations")
+}
+
+model RoomEvent {
+  id         String @id @default(cuid())
+  roomId     String
+  room       ActiveRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  guildId    String
+  guild      Guild  @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  creatorId  String
+  title      String
+  type       String @default("gaming")
+  description String?
+  startsAt   DateTime
+  endsAt     DateTime?
+  participantLimit Int @default(0)
+  discordEventId String?
+  messageId  String?
+  syncError  String?
+  status     RoomEventStatus @default(SCHEDULED)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  participants EventParticipant[]
+
+  @@index([roomId, status])
+  @@index([guildId, startsAt])
+  @@map("room_events")
+}
+
+model EventParticipant {
+  id      String @id @default(cuid())
+  eventId String
+  event   RoomEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  userId  String
+  joinedAt DateTime @default(now())
+
+  @@unique([eventId, userId])
+  @@map("event_participants")
+}
+
+model MergeRequest {
+  id        String @id @default(cuid())
+  guildId   String
+  guild     Guild  @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  requesterRoomId String
+  requesterRoom   ActiveRoom @relation("MergeRequester", fields: [requesterRoomId], references: [id], onDelete: Cascade)
+  targetRoomId    String
+  targetRoom      ActiveRoom @relation("MergeTarget", fields: [targetRoomId], references: [id], onDelete: Cascade)
+  requesterId     String
+  targetOwnerId   String
+  status          MergeStatus @default(PENDING)
+  createdAt       DateTime @default(now())
+  expiresAt       DateTime
+  resolvedAt      DateTime?
+
+  @@index([status, expiresAt])
+  @@index([targetOwnerId, status])
+  @@map("merge_requests")
+}
+
+// ─────────────────────────────────────────────────────────────
+// History, analytics, audit, preferences
+// ─────────────────────────────────────────────────────────────
+
+model RoomHistory {
+  id             String @id @default(cuid())
+  guildId        String
+  guild          Guild  @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  roomId         String?
+  channelId      String
+  ownerId        String
+  ownerName      String?
+  name           String
+  roomTypeKey    String?
+  templateName   String?
+  privacy        RoomPrivacy
+  peakMembers    Int @default(0)
+  totalJoins     Int @default(0)
+  durationSeconds Int @default(0)
+  endReason      String?
+  mergedIntoChannelId String?
+  createdAt      DateTime
+  endedAt        DateTime @default(now())
+
+  @@index([guildId, createdAt])
+  @@index([ownerId])
+  @@index([guildId, endedAt])
+  @@map("room_history")
+}
+
+model RoomAnalytics {
+  id              String   @id @default(cuid())
+  guildId         String
+  guild           Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  day             DateTime @db.Date
+  roomsCreated    Int      @default(0)
+  roomsDeleted    Int      @default(0)
+  peakConcurrent  Int      @default(0)
+  totalParticipants Int    @default(0)
+  totalVoiceMinutes Int    @default(0)
+  updatedAt       DateTime @updatedAt
+
+  @@unique([guildId, day])
+  @@index([guildId, day])
+  @@map("room_analytics")
+}
+
+model DashboardPreference {
+  id        String @id @default(cuid())
+  userId    String @unique
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  theme     String @default("dark")
+  sidebarCollapsed Boolean @default(false)
+  notifications Json @default("{}")
+  lastGuildId String?
+  updatedAt DateTime @updatedAt
+
+  @@map("dashboard_preferences")
+}
+
+model AuditLog {
+  id        String @id @default(cuid())
+  guildId   String?
+  guild     Guild? @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  actorId   String?
+  actor     User?  @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+  actorName String?
+  action    String
+  category  AuditCategory @default(SYSTEM)
+  targetType String?
+  targetId  String?
+  metadata  Json?
+  ipHash    String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([guildId, createdAt])
+  @@index([actorId])
+  @@index([category, createdAt])
+  @@map("audit_logs")
+}

@@ -1,0 +1,20 @@
+{
+  "name": "@chamber/db",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "generate": "prisma generate --schema prisma/schema.prisma",
+    "migrate": "dotenv -e ../../.env -- prisma migrate dev --schema prisma/schema.prisma",
+    "migrate:deploy": "dotenv -e ../../.env -- prisma migrate deploy --schema prisma/schema.prisma",
+    "seed": "dotenv -e ../../.env -- node prisma/seed.js",
+    "studio": "dotenv -e ../../.env -- prisma studio --schema prisma/schema.prisma"
+  },
+  "dependencies": {
+    "@prisma/client": "6.19.3"
+  },
+  "devDependencies": {
+    "prisma": "6.19.3"
+  }
+}

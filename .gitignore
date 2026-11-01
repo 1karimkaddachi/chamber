@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Environment
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Build output
+dist/
+build/
+apps/web/dist/
+packages/*/dist/
+
+# Generated
+packages/db/generated/
+*.tsbuildinfo
+
+# Local data
+storage/
+data/
+logs/
+*.log
+
+# Test / coverage
+coverage/
+.vitest/
+test-results/
+playwright-report/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Local database dumps
+*.sql.gz
+*.dump

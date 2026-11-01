@@ -1,0 +1,17 @@
+process.env.NODE_ENV = 'test';
+process.env.DATABASE_URL =
+  process.env.TEST_DATABASE_URL || 'postgresql://postgres@localhost:5434/chamber_test?schema=public';
+process.env.LOG_LEVEL = 'error';
+process.env.DEV_AUTH = 'true';
+process.env.DEV_AUTH_GUILD_ID = '900000000000000001';
+process.env.DEV_AUTH_USER_ID = '100000000000000001';
+process.env.DEV_AUTH_USERNAME = 'Test Operator';
+process.env.SESSION_SECRET = 'test-secret-4af0c2d8b1e74659ab3d2c0e9f8a7b6d5c4e3f2a1b0c9d8e7f6a5b4c3d2e1f00';
+process.env.SESSION_COOKIE_SECURE = 'false';
+process.env.WEB_ORIGIN = 'http://localhost:5174';
+process.env.API_HOST = '127.0.0.1';
+process.env.API_PORT = '3999';
+process.env.AI_ENABLED = 'false';
+process.env.DISCORD_TOKEN = '';
+process.env.DISCORD_CLIENT_ID = '';
+process.env.DISCORD_CLIENT_SECRET = '';

@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  verify:
+    name: Test, type-check and build
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: chamber_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/chamber_test?schema=public
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/chamber_test?schema=public
+      SESSION_SECRET: ci-secret-4af0c2d8b1e74659ab3d2c0e9f8a7b6d5c4e3f2a1b0c9d8e7f6a5b4c3d2e1f00
+      DEV_AUTH: "true"
+      DEV_AUTH_GUILD_ID: "900000000000000001"
+      DEV_AUTH_USER_ID: "100000000000000001"
+      WEB_ORIGIN: http://localhost:5174
+      AI_ENABLED: "false"
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: node node_modules/prisma/build/index.js generate --schema packages/db/prisma/schema.prisma
+      - run: node node_modules/prisma/build/index.js migrate deploy --schema packages/db/prisma/schema.prisma
+      - run: npm test
+      - run: npm run typecheck
+      - run: npm run build
