@@ -22,6 +22,11 @@ COPY packages/shared/package.json packages/shared/package.json
 
 RUN npm ci --include=dev --no-audit --no-fund
 
+# The lockfile can be resolved on Windows, where npm records only the win32
+# Rollup binary; restore the binding for this image's platform before building.
+COPY scripts/ensure-rollup-binding.mjs ./scripts/ensure-rollup-binding.mjs
+RUN node scripts/ensure-rollup-binding.mjs
+
 COPY packages packages
 COPY apps apps
 COPY scripts scripts

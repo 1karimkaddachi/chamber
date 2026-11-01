@@ -26,6 +26,7 @@
     "test:watch": "npm run test:watch -w @chamber/server",
     "typecheck": "npm run typecheck -w @chamber/web",
     "test:prepare": "dotenv -e .env -- node scripts/prepare-test-db.mjs",
+    "deps:bindings": "node scripts/ensure-rollup-binding.mjs",
     "qa:visual": "node scripts/visual-check.mjs"
   },
   "devDependencies": {

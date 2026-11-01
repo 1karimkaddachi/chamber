@@ -13,6 +13,8 @@ npm run db:seed
 npm run dev
 ```
 
+If you install with `npm ci` on Linux or macOS from a lockfile that was resolved on Windows, run `npm run deps:bindings` afterwards. npm records only the Rollup binary of the platform that generated the lock, and CI and the Docker image use the same script to restore the correct one.
+
 Ports:
 
 - API + bot: `3100`
