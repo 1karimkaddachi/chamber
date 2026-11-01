@@ -6,6 +6,9 @@ Chamber is a production-grade temporary voice room platform for Discord. It pair
 
 It is an independent, self-hostable open-source project. It is not affiliated with, or derived from, any existing Discord bot brand.
 
+[![CI](https://github.com/1karimkaddachi/chamber/actions/workflows/ci.yml/badge.svg)](https://github.com/1karimkaddachi/chamber/actions/workflows/ci.yml)
+![License: MIT](https://img.shields.io/badge/license-MIT-7c6cff)
+
 ---
 
 ## Contents
